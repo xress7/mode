@@ -74,9 +74,9 @@
 #define LED_IMAX_SHIFT			6
 #define AN30259A_CTN_RW_FLG		0x80
 
-#define LED_R_CURRENT		0x28
-#define LED_G_CURRENT		0x28
-#define LED_B_CURRENT		0x28
+#define LED_R_CURRENT		0x32 //0x28
+#define LED_G_CURRENT		0x32 //0x28
+#define LED_B_CURRENT		0x32 //0x28
 #define LED_MAX_CURRENT		0xFF
 #define LED_OFF				0x00
 
@@ -412,6 +412,9 @@ static void an30259a_set_led_blink(enum an30259a_led_enum led,
 		LED_DYNAMIC_CURRENT = LED_G_CURRENT;
 	else if (led == LED_B)
 		LED_DYNAMIC_CURRENT = LED_B_CURRENT;
+
+	/* In user case, LED current is restricted */
+	brightness = (brightness * LED_DYNAMIC_CURRENT) / LED_MAX_CURRENT;
 
 	if (delay_on_time > SLPTT_MAX_VALUE)
 		delay_on_time = SLPTT_MAX_VALUE;
