@@ -97,7 +97,11 @@ static int recover_dentry(struct inode *inode, struct page *ipage)
 		goto out_err;
 	}
 retry:
+#ifdef CONFIG_SDCARD_FS
 	de = f2fs_find_entry(dir, &name, &page, 0);
+#else
+	de = f2fs_find_entry(dir, &name, &page);
+#endif
 	if (de && inode->i_ino == le32_to_cpu(de->ino))
 		goto out_unmap_put;
 
