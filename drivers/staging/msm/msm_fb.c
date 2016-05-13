@@ -1439,12 +1439,6 @@ int msm_fb_resume_sw_refresher(struct msm_fb_data_type *mfd)
 
 void mdp_ppp_put_img(struct file *p_src_file, struct file *p_dst_file)
 {
-#ifdef CONFIG_ANDROID_PMEM
-	if (p_src_file)
-		put_pmem_file(p_src_file);
-	if (p_dst_file)
-		put_pmem_file(p_dst_file);
-#endif
 }
 
 int mdp_blit(struct fb_info *info, struct mdp_blit_req *req)
