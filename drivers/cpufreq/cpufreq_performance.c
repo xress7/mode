@@ -29,19 +29,7 @@ static void cpu_up_work(struct work_struct *work)
 	}
 }
 
-static void cpu_down_work(struct work_struct *work)
-{
-	int cpu;
-
-	for_each_online_cpu(cpu) {
-		if (cpu == 0)
-			continue;
-		cpu_down(cpu);
-	}
-}
-
 static DECLARE_WORK(performance_up_work, cpu_up_work);
-static DECLARE_WORK(performance_down_work, cpu_down_work);
 
 static int cpufreq_governor_performance(struct cpufreq_policy *policy,
 					unsigned int event)
@@ -54,9 +42,6 @@ static int cpufreq_governor_performance(struct cpufreq_policy *policy,
 						policy->max, event);
 		__cpufreq_driver_target(policy, policy->max,
 						CPUFREQ_RELATION_H);
-		break;
-	case CPUFREQ_GOV_STOP:
-		schedule_work_on(0, &performance_down_work);
 		break;
 	default:
 		break;
