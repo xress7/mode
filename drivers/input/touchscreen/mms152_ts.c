@@ -355,9 +355,7 @@ struct mms_ts_info {
 	bool noise_mode;
 	bool sleep_wakeup_ta_check;
 
-#if defined(SEC_TSP_DEBUG)
 	unsigned char finger_state[MAX_FINGERS];
-#endif
 
 #if defined(SEC_TSP_FW_UPDATE)
 	u8 fw_update_state;
