@@ -14,9 +14,9 @@
  *
  */
 
-#define DEBUG
+/* #define DEBUG */
 /* #define VERBOSE_DEBUG */
-#define SEC_TSP_DEBUG
+/* #define SEC_TSP_DEBUG */
 
 /* #define FORCE_FW_FLASH */
 /* #define FORCE_FW_PASS */
@@ -476,7 +476,7 @@ static void change_dvfs_lock(struct work_struct *work)
 		pr_err("%s: dev change bud lock failed(%d)\n",\
 				__func__, __LINE__);
 	else
-		pr_info("[TSP] change_dvfs_lock");
+		pr_debug("[TSP] change_dvfs_lock");
 	mutex_unlock(&info->dvfs_lock);
 }
 static void set_dvfs_off(struct work_struct *work)
@@ -495,7 +495,7 @@ static void set_dvfs_off(struct work_struct *work)
 
 	exynos_cpufreq_lock_free(DVFS_LOCK_ID_TSP);
 	info->dvfs_lock_status = false;
-	pr_info("[TSP] DVFS Off!");
+	//pr_debug("[TSP] DVFS Off!");
 	mutex_unlock(&info->dvfs_lock);
 	}
 
@@ -536,7 +536,7 @@ static void set_dvfs_lock(struct mms_ts_info *info, uint32_t on)
 				msecs_to_jiffies(TOUCH_BOOSTER_CHG_TIME));
 
 			info->dvfs_lock_status = true;
-			pr_info("[TSP] DVFS On![%d]", info->cpufreq_level);
+			//pr_debug("[TSP] DVFS On![%d]", info->cpufreq_level);
 		}
 	} else if (on == 2) {
 		cancel_delayed_work(&info->work_dvfs_off);
@@ -713,7 +713,7 @@ static void release_all_fingers(struct mms_ts_info *info)
 	input_sync(info->input_dev);
 #if TOUCH_BOOSTER
 	set_dvfs_lock(info, 2);
-	pr_info("[TSP] dvfs_lock free.\n ");
+	pr_debug("[TSP] dvfs_lock free.\n ");
 #endif
 }
 
@@ -974,18 +974,8 @@ static irqreturn_t mms_ts_interrupt(int irq, void *dev_id)
 						   MT_TOOL_FINGER, false);
 #ifdef CONFIG_SAMSUNG_PRODUCT_SHIP
 			if (info->panel == 'M') {
-				if (info->finger_state[id] != 0) {
+				if (info->finger_state[id] != 0)
 					info->finger_state[id] = 0;
-#ifdef CONFIG_LCD_FREQ_SWITCH
-					dev_notice(&client->dev,
-						"R(%c)(%d) [%2d]", info->ldi,
-					(info->tsp_lcdfreq_flag ? 40 : 60),
-						id);
-#else
-					dev_notice(&client->dev,
-						"R(%c) [%2d]", info->ldi, id);
-#endif
-				}
 			} else {
 				if (info->finger_state[id] != 0) {
 					info->finger_state[id] = 0;
@@ -995,20 +985,8 @@ static irqreturn_t mms_ts_interrupt(int irq, void *dev_id)
 			}
 #else
 			if (info->panel == 'M') {
-				if (info->finger_state[id] != 0) {
+				if (info->finger_state[id] != 0)
 					info->finger_state[id] = 0;
-#ifdef CONFIG_LCD_FREQ_SWITCH
-					dev_notice(&client->dev,
-						"R(%c)(%d) [%2d],([%4d],[%3d])",
-						info->ldi,
-					(info->tsp_lcdfreq_flag ? 40 : 60),
-						id, x, y);
-#else
-					dev_notice(&client->dev,
-						"R(%c) [%2d],([%4d],[%3d])",
-						info->ldi, id, x, y);
-#endif
-				}
 			} else {
 				if (info->finger_state[id] != 0) {
 					info->finger_state[id] = 0;
@@ -1039,34 +1017,11 @@ static irqreturn_t mms_ts_interrupt(int irq, void *dev_id)
 			input_report_abs(info->input_dev,
 				ABS_MT_PALM, palm);
 #ifdef CONFIG_SAMSUNG_PRODUCT_SHIP
-			if (info->finger_state[id] == 0) {
+			if (info->finger_state[id] == 0)
 				info->finger_state[id] = 1;
-#ifdef CONFIG_LCD_FREQ_SWITCH
-				dev_notice(&client->dev,
-					"P(%c)(%d) [%2d]", info->ldi,
-					(info->tsp_lcdfreq_flag ? 40 : 60), id);
 #else
-				dev_notice(&client->dev,
-					"P(%c) [%2d]", info->ldi, id);
-#endif
-			}
-#else
-			if (info->finger_state[id] == 0) {
+			if (info->finger_state[id] == 0)
 				info->finger_state[id] = 1;
-#ifdef CONFIG_LCD_FREQ_SWITCH
-				dev_notice(&client->dev,
-					"P(%c)(%d) [%2d],([%4d],[%3d]) w=%d, major=%d, minor=%d, angle=%d, palm=%d",
-					info->ldi,
-					(info->tsp_lcdfreq_flag ? 40 : 60),
-					id, x, y, tmp[4], tmp[6],
-					tmp[7], angle, palm);
-#else
-				dev_notice(&client->dev,
-					"P(%c) [%2d],([%4d],[%3d]) w=%d, major=%d, minor=%d, angle=%d, palm=%d",
-					info->ldi, id, x, y, tmp[4], tmp[6],
-					tmp[7], angle, palm);
-#endif
-			}
 #endif
 		} else {
 			input_mt_slot(info->input_dev, id);
