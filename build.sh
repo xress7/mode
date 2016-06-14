@@ -15,4 +15,4 @@ fi
 cp arch/arm/boot/zImage template/zImage
 find . -name "*.ko" -exec cp {} template/modules \;
 cd template
-zip -r9 ../"arter97-kernel-$(cat ../version)-g$(git rev-parse --short HEAD)-n7100.zip" * -x ".gitignore" "modules/placeholder"
+zip -r9 ../"void-kernel-$(cat ../version)-g$(git rev-parse --short HEAD)-n7100.zip" * -x ".gitignore" "modules/placeholder"
