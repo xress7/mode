@@ -982,16 +982,6 @@ static void mdnie_late_resume(struct early_suspend *h)
 #endif
 #endif
 
-//gm
-void mdnie_toggle_negative(void)
-{
-	mutex_lock(&g_mdnie->lock);
-	g_mdnie->accessibility = !g_mdnie->accessibility;
-	mutex_unlock(&g_mdnie->lock);
-
-	mdnie_update(g_mdnie);
-}
-
 static int mdnie_probe(struct platform_device *pdev)
 {
 #if defined(CONFIG_FB_MDNIE_PWM)
