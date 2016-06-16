@@ -476,7 +476,7 @@ void mali_clk_set_rate(unsigned int clk, unsigned int mhz)
 
 	rate = mali_clk_get_rate();
 
-	MALI_PRINT(("Mali frequency %d\n", rate / mhz));
+	//MALI_PRINT(("Mali frequency %d\n", rate / mhz));
 	GPU_MHZ = mhz;
 	mali_gpu_clk = (int)(rate / mhz);
 
