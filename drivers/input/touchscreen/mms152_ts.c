@@ -16,7 +16,6 @@
 
 /* #define DEBUG */
 /* #define VERBOSE_DEBUG */
-/* #define SEC_TSP_DEBUG */
 
 /* #define FORCE_FW_FLASH */
 /* #define FORCE_FW_PASS */
@@ -699,10 +698,6 @@ static void release_all_fingers(struct mms_ts_info *info)
 	dev_dbg(&client->dev, "[TSP] %s\n", __func__);
 
 	for (i = 0; i < MAX_FINGERS; i++) {
-#ifdef SEC_TSP_DEBUG
-		if (info->finger_state[i] == 1)
-			dev_notice(&client->dev, "finger %d up(force)\n", i);
-#endif
 		info->finger_state[i] = 0;
 		input_mt_slot(info->input_dev, i);
 		input_mt_report_slot_state(info->input_dev, MT_TOOL_FINGER,
