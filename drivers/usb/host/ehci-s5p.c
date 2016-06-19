@@ -373,7 +373,7 @@ static int s5p_ehci_runtime_suspend(struct device *dev)
 #endif
 
 #if defined(CONFIG_LINK_DEVICE_HSIC)
-	pr_info("%s: usage=%d, child=%d\n", __func__,
+	pr_debug("%s: usage=%d, child=%d\n", __func__,
 					atomic_read(&dev->power.usage_count),
 					atomic_read(&dev->power.child_count));
 #endif
@@ -429,7 +429,7 @@ static int s5p_ehci_runtime_resume(struct device *dev)
 #endif
 	}
 #if defined(CONFIG_LINK_DEVICE_HSIC)
-	pr_info("%s: usage=%d, child=%d\n", __func__,
+	pr_debug("%s: usage=%d, child=%d\n", __func__,
 					atomic_read(&dev->power.usage_count),
 					atomic_read(&dev->power.child_count));
 #endif
