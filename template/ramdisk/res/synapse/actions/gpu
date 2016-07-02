@@ -1,0 +1,77 @@
+# gpu [option] [file] [parameters]
+case "$1" in
+	-f) # gpu -f [file] [frequency] [value]
+		FILE="$2"
+		TARGET="$3"
+		VALUE="$4"
+
+		if [[ ! -z "$VALUE" ]]; then
+			OUTPUT="$(
+				COUNT=1
+				grep "Step" "$FILE" | awk '{print $NF}' | (while read VOLTAGE; do
+					if [[ "$COUNT" -eq "$TARGET" ]]; then
+						OUTPUT+=" $VALUE"
+					else
+						OUTPUT+=" $VOLTAGE"
+					fi
+					((COUNT++))
+				done
+				echo "$OUTPUT")
+			)"
+			echo "$OUTPUT" > "$FILE"
+		fi
+		if [[ "$TARGET" -eq 0 ]]; then
+			grep "Step" "$FILE" | awk '{print $NF}'
+		else
+			grep "Step" "$FILE" | awk "FNR == $TARGET {print \$NF}"
+		fi
+	;;
+	-v) # gpu -v [file] [voltage] [value]
+		FILE="$2"
+		TARGET="$3"
+		VALUE="$4"
+
+		if [[ ! -z "$VALUE" ]]; then
+			OUTPUT="$(
+				COUNT=1
+				awk '{print $NF}' < "$FILE" | (while read VOLTAGE; do
+					if [[ "$COUNT" -eq "$TARGET" ]]; then
+						OUTPUT+=" $VALUE"
+					else
+						OUTPUT+=" $VOLTAGE"
+					fi
+					((COUNT++))
+				done
+				echo "$OUTPUT")
+			)"
+			echo "$OUTPUT" > "$FILE"
+		fi
+		awk "FNR == $TARGET {print \$NF}" < "$FILE"
+	;;
+	-t) # gpu -t [file] [threshold] [value]
+		FILE="$2"
+		TARGET="$3"
+		VALUE="$4"
+
+		if [[ ! -z "$VALUE" ]]; then
+			OUTPUT="$(
+				COUNT=1
+				grep "Threshold" "$FILE" | awk '{for (i=2; i<NF; i++) print $i; print $NF}' | (while read THRESHOLD; do
+					if [[ "$COUNT" -eq "$TARGET" ]]; then
+						OUTPUT+=" ${VALUE}%"
+					else
+						OUTPUT+=" $THRESHOLD"
+					fi
+					((COUNT++))
+				done
+				echo "$OUTPUT")
+			)"
+			echo "$OUTPUT" > "$FILE"
+		fi
+		if [[ "$TARGET" -eq 0 ]]; then
+			grep "Threshold" "$FILE" | awk '{for (i=2; i<NF; i++) print $i; print $NF}' | tr -d '%'
+		else
+			grep "Threshold" "$FILE" | awk '{for (i=2; i<NF; i++) print $i; print $NF}' | awk "FNR == $TARGET" | tr -d '%'
+		fi
+	;;
+esac

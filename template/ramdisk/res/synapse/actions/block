@@ -1,0 +1,8 @@
+case "$1" in
+	-a) cat "$2" | busybox sed -e 's/\[//;s/\]//';;
+	-s)
+		if [[ ! -z "$3" ]]; then
+			echo "$3" > "$2"; fi
+		cat "$2" | busybox sed -n -e '/\[[^]]/s/^[^[]*\[\([^]]*\)].*$/\1/p'
+	;;
+esac

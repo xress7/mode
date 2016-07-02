@@ -1,0 +1,1104 @@
+freq_list() { for i in $(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_available_frequencies); do echo $i:'"'$(($i / 1000)) MHz'"',; done; }
+
+cat << EOF0
+{
+	sections:[
+		{
+			name:General,
+			elements:[
+				{ SPane:{
+					title:"Kernel Version",
+					description:"$(cat /proc/version)"
+				}},
+				{ SPane:{
+					title:"Cmdline",
+					description:"$(cat /proc/cmdline)"
+				}}
+			]
+		},
+		{
+			name:CPU,
+			elements:[
+				{ SLiveLabel:{
+					title:"Temperature",
+					refresh:1000,
+					action:"echo \$(cat /sys/devices/platform/s5p-tmu/temperature) °C"
+				}},
+				{ SLiveLabel:{
+					title:"Frequency",
+					refresh:1000,
+					action:"CPU=0; while [[ \$CPU -lt 4 ]]; do if [[ -e /sys/devices/system/cpu/cpu\$CPU/cpufreq/cpuinfo_cur_freq ]]; then echo CPU\$CPU: \$((\$(cat /sys/devices/system/cpu/cpu\$CPU/cpufreq/cpuinfo_cur_freq) / 1000)) MHz@n; else echo CPU\$CPU: Offline@n; fi; ((CPU++)); done"
+				}},
+				{ SPane:{
+					title:"Frequency Scaling"
+				}},
+				{ SSeekBar:{
+					title:"Max Frequency",
+					description:"Set the maximum frequency the CPU scales up to.",
+					default:$(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_max_freq),
+					action:"generic /sys/devices/system/cpu/cpu0/cpufreq/scaling_max_freq",
+					values:{ $(freq_list) }
+				}},
+				{ SSeekBar:{
+					title:"Min Frequency",
+					description:"Set the minimum frequency the CPU scales down to.",
+					default:$(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_min_freq),
+					action:"generic /sys/devices/system/cpu/cpu0/cpufreq/scaling_min_freq",
+					values:{ $(freq_list) }
+				}},
+				{ SPane:{
+					title:"Voltages"
+				}},
+$(cat /sys/devices/system/cpu/cpu0/cpufreq/UV_uV_table | while read FREQ VOLT; do
+	cat << EOF1
+				{ SSeekBar:{
+					title:"$FREQ MHz",
+					max:1500000, min:600000, unit:" uV", step:12500,
+					default:$VOLT,
+					action:"cpu -v /sys/devices/system/cpu/cpu0/cpufreq/UV_uV_table $FREQ"
+				}},
+EOF1
+done)
+				{ SPane:{
+					title:"Advanced"
+				}},
+				{ SOptionList:{
+					title:"Multicore Power Savings",
+					description:"Try to group tasks into the least cores possible.",
+					default:$(cat /sys/devices/system/cpu/sched_mc_power_savings),
+					action:"generic /sys/devices/system/cpu/sched_mc_power_savings",
+					values:{ 0:"Disabled", 1:"Enabled", 2:"Aggressive" }
+				}},
+				{ SOptionList:{
+					title:"Idle Mode",
+					description:"This setting controls which idle modes are available for the CPU. AFTR + LPA should potentially improve battery life.",
+					default:$(/res/synapse/actions/generic /sys/module/cpuidle_exynos4/parameters/enable_mask),
+					action:"generic /sys/module/cpuidle_exynos4/parameters/enable_mask",
+					values:{ 0:"IDLE only", 1:"AFTR only", 2:"IDLE + LPA", 3:"AFTR + LPA" }
+				}}
+			]
+		},
+		{
+			name:Governor,
+			elements:[
+				{ SOptionList:{
+					title:"CPU Governor",
+					description:"The CPU governor determines how the CPU responds to changes in workload. Changing the governor will impact how the CPU scales through the frequency steps available.",
+					default:$(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor),
+					action:"generic /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor",
+					values:[ $(for i in $(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_available_governors); do echo $i,; done) ],
+					notify:[
+						{ on:APPLY,
+							do:[ REFRESH, CANCEL ],
+							to:"/sys/devices/system/cpu/cpufreq"
+						},
+						{ on:REFRESH,
+							do:REFRESH,
+							to:"/sys/devices/system/cpu/cpufreq"
+						}
+					]
+				}},
+				{ SPane:{
+					title:"Governor Tunables",
+					description:"Auto-generated controls for the current governor."
+				}},
+				{ STreeDescriptor:{
+					path:"/sys/devices/system/cpu/cpufreq",
+					generic:{
+						directory:{
+							STreeDescriptor:{
+								generic:{ 
+									directory:{ },
+									element:{ SGeneric:{ title:"@NAME" }}
+								},
+								exclude:[ "boostpulse", "sampling_rate_min" ]
+							}
+						}
+					}
+				}}
+			]
+		},
+		{
+			name:MIF/INT,
+			elements:[
+				{ SDescription:{
+					description:"MIF/INT represent the SoCs memory interface and internal components. The DVFS logic controls both frequencies in pairwise steps, although the frequencies are independant, they are defined together in pairwise steps. MIF or Memory Interface is the direct voltage and frequency used on the C2C bus to the memory chip. INT or internal voltage and frequency are the internal bus and all components connected to it other than the CPU and GPU cores. This encompasses blocks like the camera interfaces, the ISP, the I/O controllers and the MFC (Hardware decoder). The configurables below control the scaling parameters of the DVFS logic of this block. The next target frequency is decided by the maximum of (Target DMC frequency ; Target CPU frequency ; Busfreq lock frequency)."
+				}},
+				{ SLiveLabel:{
+					refresh:1000,
+					action:"cat /sys/devices/system/cpu/busfreq/curr_freq | while read LINE; do echo \$LINE@n; done"
+				}},
+				{ SSeekBar:{
+					title:"Load History Size",
+					description:"The Platform Performance Monitoring Unit (PPMU) collects usage information on the bus on a hardware level from the CPU and the two memory controllers (DMCs). This dictates the size of the historic the kernel keeps in store.",
+					min:1, max:5, unit:" samples",
+					default:$(cat /sys/devices/system/cpu/busfreq/load_history_size),
+					action:"generic /sys/devices/system/cpu/busfreq/load_history_size"
+				}},
+				{ SSeekBar:{
+					title:"DMC Maximum Threshold",
+					description:"The DMC maximum threshold above which the average load of the memory controllers over the last sample is exceeded, the maximum OPP step is set.",
+					min:1, max:100, unit:"%",
+					default:$(cat /sys/devices/system/cpu/busfreq/dmc_max_threshold),
+					action:"generic /sys/devices/system/cpu/busfreq/dmc_max_threshold"
+				}},
+				{ SSeekBar:{
+					title:"Idle Threshold",
+					description:"The idle threshold, which, if the memory controller load falls below it, reduces the OPP step by one step. If the live load falls between the idle threshold and DMC max threshold, the average DMC load over the load history size is taken and normalized towards the maximum OPP frequency, and this ondemand-like target frequency dictates the next DMC frequency.",
+					min:1, max:50, unit:"%",
+					default:$(cat /sys/devices/system/cpu/busfreq/idle_threshold),
+					action:"generic /sys/devices/system/cpu/busfreq/idle_threshold"
+				}},
+				{ SSeekBar:{
+					title:"Maximum CPU Bus Threshold",
+					description:"The CPU maximum bus threshold above which the load of the CPU bus over the last sample is exceeded, the maximum OPP step is set.",
+					min:1, max:100, unit:"%",
+					default:$(cat /sys/devices/system/cpu/busfreq/max_cpu_threshold),
+					action:"generic /sys/devices/system/cpu/busfreq/max_cpu_threshold"
+				}},
+				{ SSeekBar:{
+					title:"Up CPU threshold",
+					description:"The CPU bus up threshold, actually acting as a delimiter threshold of sorts, if the load exceeds up_threshold but doesn't exceed max CPU threshold, it takes into account the CPU load slope size to step down one step, if the slope conditional isn't met, the CPU target bus frequency stays the same.",
+					min:1, max:100, unit:"%",
+					default:$(cat /sys/devices/system/cpu/busfreq/up_cpu_threshold),
+					action:"generic /sys/devices/system/cpu/busfreq/up_cpu_threshold"
+				}},
+				{ SSeekBar:{
+					title:"CPU Slope Size",
+					description:"CPU slope size is defined by the load difference from the current sample to the previous sample. If the slope exceeds the set value, the CPU target bus frequency steps down one step.",
+					min:1, max:50, unit:"%",
+					default:$(cat /sys/devices/system/cpu/busfreq/cpu_slope_size),
+					action:"generic /sys/devices/system/cpu/busfreq/cpu_slope_size"
+				}}
+			]
+		},
+		{
+			name:GPU,
+			elements:[
+				{ SLiveLabel:{
+					title:"Current GPU Frequency",
+					refresh:1000,
+					action:"echo \$(cat /sys/module/mali/parameters/mali_gpu_clk) MHz"
+				}},
+				{ SLiveLabel:{
+					title:"Current GPU Voltage",
+					refresh:1000,
+					action:"echo \$(cat /sys/module/mali/parameters/mali_gpu_vol) uV"
+				}},
+				{ SPane:{
+					title:"GPU Frequencies",
+					description:"These values control GPU frequencies on each step. Please keep in mind that higher frequencies require also more power, so don't forget to adjust voltages accordingly!"
+				}},
+$(COUNT=1; /res/synapse/actions/gpu -f "/sys/devices/virtual/misc/gpu_clock_control/gpu_control" "0" | while read FREQ; do
+	cat << EOF1
+				{ SOptionList:{
+					title:"GPU step $COUNT frequency",
+					unit:" MHz",
+					default:$FREQ,
+					action:"gpu -f /sys/devices/virtual/misc/gpu_clock_control/gpu_control $COUNT",
+					values:[ 54, 108, 160, 266, 275, 300, 333, 350, 440, 533, 600, 640, 666, 700 ]
+				}},
+EOF1
+	((COUNT++))
+done)
+				{ SPane:{
+					title:"GPU voltages",
+					description:"These values control GPU voltages on each step. Higher voltages consume more battery and produce more heat, but also increase GPU stability"
+				}},
+$(COUNT=1; /res/synapse/actions/advanced -f NF /sys/devices/virtual/misc/gpu_voltage_control/gpu_control | while read VOLTAGE; do
+	cat << EOF1
+				{ SSeekBar:{
+					title:"GPU step $COUNT voltage",
+					max:1300000, min:500000, unit:" uV", step:12500,
+					default:$VOLTAGE,
+					action:"gpu -v /sys/devices/virtual/misc/gpu_voltage_control/gpu_control $COUNT"
+				}},
+EOF1
+	((COUNT++))
+done)
+				{ SPane:{
+					title:"GPU Thresholds",
+					description:"These values specify GPU load thresholds for GPU governor, which increases/decreases current frequency. Thresholds specify how high, or how low current GPU load must be to increase/decrease to given frequency"
+				}},
+$(COUNT=1; HELP_COUNT=1; HELP_DIRECTION="->"; for THRESHOLD in $(/res/synapse/actions/gpu -t "/sys/devices/virtual/misc/gpu_clock_control/gpu_control" "0"); do
+	cat << EOF1
+				{ SSeekBar:{
+					title:"GPU threshold $HELP_COUNT $HELP_DIRECTION $((HELP_COUNT + 1))",
+					max:100, unit:"%",
+					default:$THRESHOLD,
+					action:"gpu -t /sys/devices/virtual/misc/gpu_clock_control/gpu_control $COUNT"
+				}},
+EOF1
+	((COUNT++))
+	if [[ "$HELP_DIRECTION" = "->" ]]; then
+		HELP_DIRECTION="<-"
+	else
+		HELP_DIRECTION="->"
+		((HELP_COUNT++))
+	fi
+done)
+				{ SPane:{
+					title:"Debug",
+					description:"[0] Disable Debug, [1:2] Is messages with highest priority, indicate possible errors, [3:4] Is messages with medium priority, output important variables, [5:6] Is messages with low priority, used during extensive debugging.",
+				}},
+				{ SSeekBar:{
+					title:"Mali Debug Level",
+					max:6,
+					default:$(cat /sys/module/mali/parameters/mali_debug_level),
+					action:"generic /sys/module/mali/parameters/mali_debug_level"
+				}},
+				{ SSeekBar:{
+					title:"Ump Debug Level",
+					max:6,
+					default:$(cat /sys/module/ump/parameters/ump_debug_level),
+					action:"generic /sys/module/ump/parameters/ump_debug_level"
+				}}
+				
+			]
+		},
+$(for BLOCK in $(find /sys/block/mmcblk* -maxdepth 0 | awk -F / '{print $NF}'); do
+	case "$BLOCK" in
+		mmcblk0) NAME="Internal Storage";;
+		mmcblk1) NAME="External Storage";;
+		*) NAME="$BLOCK";;
+	esac
+	cat << EOF1
+		{
+			name:$NAME,
+			elements:[
+				{ SOptionList:{
+					title:"I/O Scheduler",
+					default:$(/res/synapse/actions/block -s /sys/block/$BLOCK/queue/scheduler),
+					action:"block -s /sys/block/$BLOCK/queue/scheduler",
+					values:[ $(for i in $(/res/synapse/actions/block -a /sys/block/$BLOCK/queue/scheduler); do echo "$i,"; done) ]
+				}},
+				{ SSeekBar:{
+					title:"Read-Ahead",
+					description:"Maximum number of kilobytes to read-ahead for filesystems on this block device.",
+					min:128, max:4096, unit:"kB", step:128,
+					default:$(cat /sys/block/$BLOCK/queue/read_ahead_kb),
+					action:"generic /sys/block/$BLOCK/queue/read_ahead_kb"
+				}},
+				{ SCheckBox:{
+					label:"Add Random",
+					description:"Draw entropy from spinning (rotational) storage.",
+					default:$(cat /sys/block/$BLOCK/queue/add_random),
+					action:"generic /sys/block/$BLOCK/queue/add_random"
+				}},
+				{ SCheckBox:{
+					label:"I/O Stats",
+					description:"Maintain I/O statistics for this storage device. Disabling will break I/O monitoring apps.",
+					default:$(cat /sys/block/$BLOCK/queue/iostats),
+					action:"generic /sys/block/$BLOCK/queue/iostats"
+				}},
+				{ SSeekBar:{
+					title:"Max Sectors",
+					description:"This is the maximum number of kilobytes that the block layer will allow for a filesystem request.",
+					min:128, max:$(cat /sys/block/$BLOCK/queue/max_hw_sectors_kb), unit:"kb", step:128,
+					default:$(cat /sys/block/$BLOCK/queue/max_sectors_kb),
+					action:"generic /sys/block/$BLOCK/queue/max_sectors_kb"
+				}},
+				{ SOptionList:{
+					title:"No Merges",
+					description:"This enables the user to disable the lookup logic involved with IO merging requests in the block layer. By default (0) all merges are enabled. When set to 1 only simple one-hit merges will be tried. When set to 2 no merge algorithms will be tried (including one-hit or more complex tree/hash lookups).",
+					default:$(cat /sys/block/$BLOCK/queue/nomerges),
+					action:"generic /sys/block/$BLOCK/queue/nomerges",
+					values:{ 0:"0: All merges", 1:"1: Only simple one-hit", 2:"2: No merges" }
+				}},
+				{ SSeekBar:{
+					title:"NR Requests",
+					description:"This controls how many requests may be allocated in the block layer for read or write requests. Note that the total allocated number may be twice this amount, since it applies only to reads or writes (not the accumulated sum).",
+					min:128, max:4096, step:128,
+					default:$(cat /sys/block/$BLOCK/queue/nr_requests),
+					action:"generic /sys/block/$BLOCK/queue/nr_requests"
+				}},
+				{ SCheckBox:{
+					label:"Rotational",
+					description:"Treat device as rotational storage.",
+					default:$(cat /sys/block/$BLOCK/queue/rotational),
+					action:"generic /sys/block/$BLOCK/queue/rotational"
+				}},
+				{ SOptionList:{
+					title:"RQ Affinity",
+					description:"If this option is enabled, the block layer will migrate request completions to the CPU that originally submitted the request. For some workloads this provides a significant reduction in CPU cycles due to caching effects.",
+					default:$(cat /sys/block/$BLOCK/queue/rq_affinity),
+					action:"generic /sys/block/$BLOCK/queue/rq_affinity",
+					values:{ 0:"Disabled", 1:"Enabled", 2:"Aggressive" }
+				}}
+			]
+		},
+EOF1
+done)
+		{
+			name:LED,
+			elements:[
+				{ SCheckBox:{
+					label:"Enable LED Fading",
+					default:$(/res/synapse/actions/advanced -f 1 /sys/devices/virtual/sec/led/led_fade),
+					action:"advanced -f 1 /sys/devices/virtual/sec/led/led_fade"
+				}},
+				{ SSeekBar:{
+					title:"Intensity (brightness)",
+					max:255, unit:"", step:1,
+					default:$(/res/synapse/actions/advanced -f 1 /sys/devices/virtual/sec/led/led_intensity),
+					action:"advanced -f 1 /sys/devices/virtual/sec/led/led_intensity"
+				}},
+				{ SSeekBar:{
+					title:"LED speed",
+					description:"This setting will multiply speed of fading/blinking LED by given value. 0 means continuous light",
+					max:15, unit:"x", step:1,
+					default:$(/res/synapse/actions/advanced -f 1 /sys/devices/virtual/sec/led/led_speed),
+					action:"advanced -f 1 /sys/devices/virtual/sec/led/led_speed"
+				}},
+$(for SLOPE in 1 2 3 4; do
+	case "$SLOPE" in
+		1|2) TYPE="up";;
+		3|4) TYPE="down";;
+	esac
+	cat << EOF1
+				{ SSeekBar:{
+					title:"Slope $TYPE operation $SLOPE",
+					description:"This value determines the time during slope $TYPE operation $SLOPE",
+					max:5, unit:" ms",
+					default:$(/res/synapse/actions/led -s /sys/devices/virtual/sec/led/led_slope $SLOPE),
+					action:"led -s /sys/devices/virtual/sec/led/led_slope $SLOPE"
+				}},
+EOF1
+done)
+			]
+		},
+		{
+			name:Power,
+			elements:[
+				{ SPane:{
+					title:"Battery",
+				}},
+				{ SLiveLabel:{
+					title:"Capacity",
+					refresh:1000,
+					action:"echo \$(cat /sys/devices/platform/samsung-battery/power_supply/battery/capacity)%"
+				}},
+				{ SLiveLabel:{
+					title:"Temperature",
+					refresh:1000,
+					action:"echo \$((\$(cat /sys/devices/platform/samsung-battery/power_supply/battery/temp) / 10 )) °C"
+				}},
+				{ SLiveLabel:{
+					title:"Status",
+					refresh:1000,
+					action:"cat /sys/devices/platform/samsung-battery/power_supply/battery/status"
+				}},
+				{ SLiveLabel:{
+					title:"Charge Type",
+					refresh:1000,
+					action:"cat /sys/devices/platform/samsung-battery/power_supply/battery/charge_type"
+				}},
+				{ SLiveLabel:{
+					title:"Health",
+					refresh:1000,
+					action:"cat /sys/devices/platform/samsung-battery/power_supply/battery/health"
+				}},
+				{ SLiveLabel:{
+					title:"Voltage Now",
+					refresh:1000,
+					action:"cat /sys/devices/platform/samsung-battery/power_supply/battery/voltage_now"
+				}},
+				{ SLiveLabel:{
+					title:"Current Now",
+					refresh:1000,
+					action:"echo \$(cat /sys/devices/platform/samsung-battery/power_supply/battery/current_now) mA"
+				}},
+				{ SPane:{
+					title:"Charger Control"
+				}},
+				{ SSeekBar:{
+					title:"DCP and Mains AC Input Current",
+					description:"Dedicated Charging Port and Mains input current limit applied when detection of a standalone charger happens, or if a USB connector with shorted D+ and D- pins is attached.",
+					max:2500, unit:"mA",
+					default:$(cat /sys/devices/platform/samsung-battery/dcp_ac_input_curr),
+					action:"generic /sys/devices/platform/samsung-battery/dcp_ac_input_curr"
+				}},
+				{ SSeekBar:{
+					title:"DCP and Mains AC Charge Current",
+					description:"Dedicated Charging Port and Mains charge current supplied to battery during charging.",
+					max:2500, unit:"mA",
+					default:$(cat /sys/devices/platform/samsung-battery/dcp_ac_chrg_curr),
+					action:"generic /sys/devices/platform/samsung-battery/dcp_ac_chrg_curr"
+				}},
+				{ SSeekBar:{
+					title:"SDP Input Current",
+					description:"Standard Downstream Port input current limit applied on plain and compliant USB data connectivity ports.",
+					max:2500, unit:"mA",
+					default:$(cat /sys/devices/platform/samsung-battery/sdp_input_curr),
+					action:"generic /sys/devices/platform/samsung-battery/sdp_input_curr"
+				}},
+				{ SSeekBar:{
+					title:"SDP Charge Current",
+					description:"Standard Downstream Port charge current supplied to battery during charging.",
+					max:2500, unit:"mA",
+					default:$(cat /sys/devices/platform/samsung-battery/sdp_chrg_curr),
+					action:"generic /sys/devices/platform/samsung-battery/sdp_chrg_curr"
+				}},
+				{ SSeekBar:{
+					title:"CDP Input Current",
+					description:"Charging Downstream Port input current limit applied on BCS 1.1 special charging USB data connectivity ports.",
+					max:2500, unit:"mA",
+					default:$(cat /sys/devices/platform/samsung-battery/cdp_input_curr),
+					action:"generic /sys/devices/platform/samsung-battery/cdp_input_curr"
+				}},
+				{ SSeekBar:{
+					title:"CDP Charge Current",
+					description:"Charging Downstream Port and Mains charge current supplied to battery during charging.",
+					max:2500, unit:"mA",
+					default:$(cat /sys/devices/platform/samsung-battery/cdp_chrg_curr),
+					action:"generic /sys/devices/platform/samsung-battery/cdp_chrg_curr"
+				}},
+				{ SSeekBar:{
+					title:"Charge Hard Voltage",
+					description:"Charger chip charge voltage supplied to the battery.",
+					default:$(cat /sys/devices/platform/samsung-battery/batt_chrg_hard_volt),
+					action:"generic /sys/devices/platform/samsung-battery/batt_chrg_hard_volt",
+					values:{ 1:"4.2", 2:"4.35-default", 3:"4.4" }
+				}},
+				{ SSeekBar:{
+					title:"Charge Soft Voltage",
+					description:"Charge voltage the battery has to reach until the charger regulation turns off charging, as measured by the fuelgauge.",
+					min:3600000, max:4500000,
+					default:$(cat /sys/devices/platform/samsung-battery/batt_chrg_soft_volt),
+					action:"generic /sys/devices/platform/samsung-battery/batt_chrg_soft_volt",
+				}},
+				{ SCheckBox:{
+					label:"Ignore 100mA Step Safety Margin",
+					description:"The charger chip is capable of detecting instabilities in the power supplied to the chip, it dinamically adjusts input currents until it reaches a stable power readout - at this point it reduces it further by an additional 100mA step as a safety margin. This ignores that margin.",
+					default:$(cat /sys/devices/platform/samsung-battery/ignore_stable_margin),
+					action:"generic /sys/devices/platform/samsung-battery/ignore_stable_margin"
+				}},
+				{ SCheckBox:{
+					label:"Ignore Unstable Power Detection",
+					description:"This completely disables the unstable power detection.",
+					default:$(cat /sys/devices/platform/samsung-battery/ignore_unstable_power),
+					action:"generic /sys/devices/platform/samsung-battery/ignore_unstable_power"
+				}}
+				
+			]
+		},
+		{
+			name:Screen,
+			elements:[
+				{ SPane:{
+					title:"Touchwake"
+				}},
+				{ SCheckBox:{
+					label:"Tap2wake",
+					description:"Tap2wake keeps the digitizer of the display panel active after screen timeout so it can wake the device with a touch.",
+					default:$(cat /sys/devices/virtual/misc/touchwake/enabled),
+					action:"generic /sys/devices/virtual/misc/touchwake/enabled"
+				}},
+				{ SCheckBox:{
+					label:"DoubleTap2wake",
+					description:"The device will wake up only with two taps instead of one, you need to enable Tap2wake first!",
+					default:$(cat /sys/devices/virtual/misc/touchwake/knockon),
+					action:"generic /sys/devices/virtual/misc/touchwake/knockon"
+				}},
+				{ SSeekBar:{
+					title:"Delay",
+					description:"Timeout after the screen goes off, set 0 for infinite mode.",
+					max:3600, unit:" s",
+					default:$(cat /sys/devices/virtual/misc/touchwake/delay),
+					action:"generic /sys/devices/virtual/misc/touchwake/delay"
+				}},
+				{ SSeekBar:{
+					title:"Charging Delay",
+					description:"Timeout after the screen goes off during charge, set 0 for infinite mode.",
+					max:3600, unit:" s",
+					default:$(cat /sys/devices/virtual/misc/touchwake/charging_delay),
+					action:"generic /sys/devices/virtual/misc/touchwake/charging_delay"
+				}},
+				{ SCheckBox:{
+					label:"Keypower Mode",
+					description:"Enable Tap2wake/DoubleTap2wake also when the power key is pressed.",
+					default:$(cat /sys/devices/virtual/misc/touchwake/keypower_mode),
+					action:"generic /sys/devices/virtual/misc/touchwake/keypower_mode"
+				}},
+				{ SCheckBox:{
+					label:"Charging Mode",
+					description:"Enable Tap2wake/DoubleTap2wake only when the device is charging.",
+					default:$(cat /sys/devices/virtual/misc/touchwake/charging_mode),
+					action:"generic /sys/devices/virtual/misc/touchwake/charging_mode"
+				}},
+				{ SPane:{
+					title:"mDNIe global controls",
+					description:"mobile Digital Natural Image engine control. Samsungs hardware image post-processor controls virtually any image manipulation. All control master switches, if left as delta controls, will negate the sequence setting if checked. Master sequence has SCR and CS enabled by default."
+				}},
+				{ SOptionList:{
+					title:"Mode",
+					description:"Set the mode for mDNIe.",
+					default:$(cat /sys/devices/platform/samsung-pd.2/mdnie/mdnie/mdnie/mode),
+					action:"generic /sys/devices/platform/samsung-pd.2/mdnie/mdnie/mdnie/mode",
+					values:{ 0:"Dynamic", 1:"Standard", 2:"Natural", 3:"Movie", 4:"Auto" }
+				}},
+				{ SOptionList:{
+					title:"Scenario",
+					description:"Set the scenario for mDNIe.",
+					default:$(cat /sys/devices/platform/samsung-pd.2/mdnie/mdnie/mdnie/scenario),
+					action:"generic /sys/devices/platform/samsung-pd.2/mdnie/mdnie/mdnie/scenario",
+					values:{ 0:"UI (stock)", 1:"Video", 2:"Video Warm", 3:"Video Cold", 4:"Camera", 5:"Navigation", 6:"Gallery", 7:"VT", 8:"Browser", 9:"eBook", 10:"Email" }
+				}},
+				{ SCheckBox:{
+					label:"Negative Mode",
+					description:"Enable or disable inverted colors.",
+					default:$(/res/synapse/actions/advanced -p , 1 /sys/devices/platform/samsung-pd.2/mdnie/mdnie/mdnie/accessibility),
+					action:"advanced -p , 1 /sys/devices/platform/samsung-pd.2/mdnie/mdnie/mdnie/accessibility"
+				}},
+				{ SCheckBox:{
+					label:"Enable register hook",
+					description:"Register intercept acts like a hook and will enable catching scenario settings and modifying them through delta controls. If a scenario does not have a setting (register) in its base sequence, then it cannot be modified by the hook.",
+					default:$(cat /sys/devices/virtual/misc/mdnie/hook_intercept),
+					action:"generic /sys/devices/virtual/misc/mdnie/hook_intercept"
+				}},
+				{ SCheckBox:{
+					label:"Enable master sequence",
+					description:"Enabling the master sequence will disable and ignore Samsungs profiles and scenarios, the ROM controls will be disabled.",
+					default:$(cat /sys/devices/virtual/misc/mdnie/sequence_intercept),
+					action:"generic /sys/devices/virtual/misc/mdnie/sequence_intercept"
+				}},
+				{ SPane:{
+					title:"Digital screen brightness",
+					description:"Uses mDNIe to bypass the backlight driver brightness and decrease brightness by reducing luminance on the the channel RGB values. It allows to reduce brightness beyond the stock minimum."
+				}},
+				{ SSeekBar:{
+					title:"Brightness reduction",
+					description:"The amount of luminance to be shaved off from the colour channel components.",
+					max:128,
+					default:$(cat /sys/devices/virtual/misc/mdnie/brightness_reduction),
+					action:"generic /sys/devices/virtual/misc/mdnie/brightness_reduction"
+				}},
+				{ SSeekBar:{
+					title:"Takeover point",
+					description:"The stock backlight driver ignores brightness values below 10 (0-255) and values below that point do not have any effect on brightness. The takeover point is the point in the brightness curve where the digital brightness reduction takes effect. The brightness reduction is weighted linearly from full configured value to zero on the range of zero brigtness to the takeover point. If the takeover point is beyond 10, then both hardware and digital brightness reduction can take place. This can help with having a less abrupt brightness curve caused by the digital reduction.",
+					max:64,
+					default:$(cat /sys/devices/virtual/misc/mdnie/brightness_takeover_point),
+					action:"generic /sys/devices/virtual/misc/mdnie/brightness_takeover_point"
+				}},
+				{ SSeekBar:{
+					title:"Auto-brightness input delta",
+					description:"Positive delta to be applied on top system brightness. Used only for the digital reduction logic during stock ROM auto-brightness activation, can be used to brighten back up the reduction value by shifting the interpreted brightness value without sacrificing minimum brightness in manual mode.",
+					max:64,
+					default:$(cat /sys/devices/virtual/misc/mdnie/brightness_input_delta),
+					action:"generic /sys/devices/virtual/misc/mdnie/brightness_input_delta"
+				}},
+				{ SPane:{
+					title:"DNR and HDR control",
+					description:"Work exclusively on the stock video player."
+				}},
+				{ SCheckBox:{
+					label:"Digital noise reduction",
+					description:"Enable Digital noise reduction for video playback.",
+					default:$(cat /sys/devices/virtual/misc/mdnie/hook_control/s_digital_noise_reduction),
+					action:"generic /sys/devices/virtual/misc/mdnie/hook_control/s_digital_noise_reduction"
+				}},
+				{ SCheckBox:{
+					label:"High dynamic range",
+					description:"Enable HDR for video playback.",
+					default:$(cat /sys/devices/virtual/misc/mdnie/hook_control/s_high_dynamic_range),
+					action:"generic /sys/devices/virtual/misc/mdnie/hook_control/s_high_dynamic_range"
+				}},
+				{ SPane:{
+					title:"Chroma saturation control",
+					description:"Chroma saturation works in the HSL color space, modifying saturation will dilute the hue with white or darken with black. Variations in chroma are achieved by adding different amounts of a neutral gray of the same value as the color you want to alter."
+				}},
+				{ SCheckBox:{
+					label:"Chroma saturation factory settings",
+					description:"Factory settings override the controls.",
+					default:$(cat /sys/devices/virtual/misc/mdnie/hook_control/s_factory_chroma_saturation),
+					action:"generic /sys/devices/virtual/misc/mdnie/hook_control/s_factory_chroma_saturation"
+				}},
+				{ SSeekBar:{
+					title:"Chroma saturation weight",
+					description:"Saturation weight/multipliers for RGB/YCM chroma gains.",
+					min:-16, max:32,
+					default:$(cat /sys/devices/virtual/misc/mdnie/hook_control/cs_weight),
+					action:"generic /sys/devices/virtual/misc/mdnie/hook_control/cs_weight"
+				}},
+				{ SSeekBar:{
+					title:"Red gain",
+					min:-16, max:32,
+					default:$(cat /sys/devices/virtual/misc/mdnie/hook_control/cs_red),
+					action:"generic /sys/devices/virtual/misc/mdnie/hook_control/cs_red"
+				}},
+				{ SSeekBar:{
+					title:"Green gain",
+					min:-16, max:32,
+					default:$(cat /sys/devices/virtual/misc/mdnie/hook_control/cs_green),
+					action:"generic /sys/devices/virtual/misc/mdnie/hook_control/cs_green"
+				}},
+				{ SSeekBar:{
+					title:"Blue gain",
+					min:-16, max:32,
+					default:$(cat /sys/devices/virtual/misc/mdnie/hook_control/cs_blue),
+					action:"generic /sys/devices/virtual/misc/mdnie/hook_control/cs_blue"
+				}},
+				{ SSeekBar:{
+					title:"Yellow gain",
+					min:-16, max:32,
+					default:$(cat /sys/devices/virtual/misc/mdnie/hook_control/cs_yellow),
+					action:"generic /sys/devices/virtual/misc/mdnie/hook_control/cs_yellow"
+				}},
+				{ SSeekBar:{
+					title:"Cyan gain",
+					min:-16, max:32,
+					default:$(cat /sys/devices/virtual/misc/mdnie/hook_control/cs_cyan),
+					action:"generic /sys/devices/virtual/misc/mdnie/hook_control/cs_cyan"
+				}},
+				{ SSeekBar:{
+					title:"Magenta gain",
+					min:-16, max:32,
+					default:$(cat /sys/devices/virtual/misc/mdnie/hook_control/cs_magenta),
+					action:"generic /sys/devices/virtual/misc/mdnie/hook_control/cs_magenta"
+				}},
+				{ SPane:{
+					title:"White color temperature control",
+					description:"Changes white color temperature."
+				}},
+				{ SCheckBox:{
+					label:"Color temperature master switch",
+					default:$(cat /sys/devices/virtual/misc/mdnie/hook_control/s_MCM),
+					action:"generic /sys/devices/virtual/misc/mdnie/hook_control/s_MCM"
+				}},
+				{ SSeekBar:{
+					title:"Color temperature",
+					description:"Starting point is 6500K.",
+					min:-20, max:20, unit:"00K",
+					default:$(cat /sys/devices/virtual/misc/mdnie/hook_control/mcm_temperature),
+					action:"generic /sys/devices/virtual/misc/mdnie/hook_control/mcm_temperature"
+				}},
+				{ SPane:{
+					title:"White color balance",
+					description:"The controls is divided in 8 channels, RGB, YCM, W and K. SCR controls are RGB modifiers on each of the controls altering the primary luminosities on that channel."
+				}},
+				{ SSeekBar:{
+					title:"Red",
+					description:"Red in white.",
+					min:-64, max:20,
+					default:$(cat /sys/devices/virtual/misc/mdnie/hook_control/scr_white_red),
+					action:"generic /sys/devices/virtual/misc/mdnie/hook_control/scr_white_red"
+				}},
+				{ SSeekBar:{
+					title:"Green",
+					description:"Green in white.",
+					min:-64, max:20,
+					default:$(cat /sys/devices/virtual/misc/mdnie/hook_control/scr_white_green),
+					action:"generic /sys/devices/virtual/misc/mdnie/hook_control/scr_white_green"
+				}},
+				{ SSeekBar:{
+					title:"Blue",
+					description:"Blue in white.",
+					min:-64, max:20,
+					default:$(cat /sys/devices/virtual/misc/mdnie/hook_control/scr_white_blue),
+					action:"generic /sys/devices/virtual/misc/mdnie/hook_control/scr_white_blue"
+				}},
+				{ SPane:{
+					title:"Primary (RGB) color channels addends"
+				}},
+				{ SSeekBar:{
+					title:"Red in red",
+					description:"Red in red channel.",
+					min:-64, max:32,
+					default:$(cat /sys/devices/virtual/misc/mdnie/hook_control/scr_red_red),
+					action:"generic /sys/devices/virtual/misc/mdnie/hook_control/scr_red_red"
+				}},
+				{ SSeekBar:{
+					title:"Green in red",
+					description:"Green in red channel.",
+					min:-64, max:32,
+					default:$(cat /sys/devices/virtual/misc/mdnie/hook_control/scr_red_green),
+					action:"generic /sys/devices/virtual/misc/mdnie/hook_control/scr_red_green"
+				}},
+				{ SSeekBar:{
+					title:"Blue in red",
+					description:"Blue in red channel.",
+					min:-64, max:32,
+					default:$(cat /sys/devices/virtual/misc/mdnie/hook_control/scr_red_blue),
+					action:"generic /sys/devices/virtual/misc/mdnie/hook_control/scr_red_blue"
+				}},
+				{ SSeekBar:{
+					title:"Red in green",
+					description:"Red in green channel.",
+					min:-64, max:32,
+					default:$(cat /sys/devices/virtual/misc/mdnie/hook_control/scr_green_red),
+					action:"generic /sys/devices/virtual/misc/mdnie/hook_control/scr_green_red"
+				}},
+				{ SSeekBar:{
+					title:"Green in green",
+					description:"Green in green channel.",
+					min:-64, max:32,
+					default:$(cat /sys/devices/virtual/misc/mdnie/hook_control/scr_green_green),
+					action:"generic /sys/devices/virtual/misc/mdnie/hook_control/scr_green_green"
+				}},
+				{ SSeekBar:{
+					title:"Blue in green",
+					description:"Blue in green channel.",
+					min:-64, max:32,
+					default:$(cat /sys/devices/virtual/misc/mdnie/hook_control/scr_green_blue),
+					action:"generic /sys/devices/virtual/misc/mdnie/hook_control/scr_green_blue"
+				}},
+				{ SSeekBar:{
+					title:"Red in blue",
+					description:"Red in blue channel.",
+					min:-64, max:32,
+					default:$(cat /sys/devices/virtual/misc/mdnie/hook_control/scr_blue_red),
+					action:"generic /sys/devices/virtual/misc/mdnie/hook_control/scr_blue_red"
+				}},
+				{ SSeekBar:{
+					title:"Green in blue",
+					description:"Green in blue channel.",
+					min:-64, max:32,
+					default:$(cat /sys/devices/virtual/misc/mdnie/hook_control/scr_blue_green),
+					action:"generic /sys/devices/virtual/misc/mdnie/hook_control/scr_blue_green"
+				}},
+				{ SSeekBar:{
+					title:"Blue in blue",
+					description:"Blue in blue channel.",
+					min:-64, max:32,
+					default:$(cat /sys/devices/virtual/misc/mdnie/hook_control/scr_blue_blue),
+					action:"generic /sys/devices/virtual/misc/mdnie/hook_control/scr_blue_blue"
+				}},
+				{ SPane:{
+					title:"Secondary (YCM) color channels addends"
+				}},
+				{ SSeekBar:{
+					title:"Red in yellow",
+					description:"Red in yellow channel.",
+					min:-64, max:32,
+					default:$(cat /sys/devices/virtual/misc/mdnie/hook_control/scr_yellow_red),
+					action:"generic /sys/devices/virtual/misc/mdnie/hook_control/scr_yellow_red"
+				}},
+				{ SSeekBar:{
+					title:"Green in yellow",
+					description:"Green in yellow channel.",
+					min:-64, max:32,
+					default:$(cat /sys/devices/virtual/misc/mdnie/hook_control/scr_yellow_green),
+					action:"generic /sys/devices/virtual/misc/mdnie/hook_control/scr_yellow_green"
+				}},
+				{ SSeekBar:{
+					title:"Blue in yellow",
+					description:"Blue in yellow channel.",
+					min:-64, max:32,
+					default:$(cat /sys/devices/virtual/misc/mdnie/hook_control/scr_yellow_blue),
+					action:"generic /sys/devices/virtual/misc/mdnie/hook_control/scr_yellow_blue"
+				}},
+				{ SSeekBar:{
+					title:"Red in cyan",
+					description:"Red in cyan channel.",
+					min:-64, max:32,
+					default:$(cat /sys/devices/virtual/misc/mdnie/hook_control/scr_cyan_red),
+					action:"generic /sys/devices/virtual/misc/mdnie/hook_control/scr_cyan_red"
+				}},
+				{ SSeekBar:{
+					title:"Green in cyan",
+					description:"Green in cyan channel.",
+					min:-64, max:32,
+					default:$(cat /sys/devices/virtual/misc/mdnie/hook_control/scr_cyan_green),
+					action:"generic /sys/devices/virtual/misc/mdnie/hook_control/scr_cyan_green"
+				}},
+				{ SSeekBar:{
+					title:"Blue in cyan",
+					description:"Blue in cyan channel.",
+					min:-64, max:32,
+					default:$(cat /sys/devices/virtual/misc/mdnie/hook_control/scr_cyan_blue),
+					action:"generic /sys/devices/virtual/misc/mdnie/hook_control/scr_cyan_blue"
+				}},
+				{ SSeekBar:{
+					title:"Red in magenta",
+					description:"Red in magenta channel.",
+					min:-64, max:32,
+					default:$(cat /sys/devices/virtual/misc/mdnie/hook_control/scr_magenta_red),
+					action:"generic /sys/devices/virtual/misc/mdnie/hook_control/scr_magenta_red"
+				}},
+				{ SSeekBar:{
+					title:"Green in magenta",
+					description:"Green in magenta channel.",
+					min:-64, max:32,
+					default:$(cat /sys/devices/virtual/misc/mdnie/hook_control/scr_magenta_green),
+					action:"generic /sys/devices/virtual/misc/mdnie/hook_control/scr_magenta_green"
+				}},
+				{ SSeekBar:{
+					title:"magenta in magenta",
+					description:"magenta in magenta channel.",
+					min:-64, max:32,
+					default:$(cat /sys/devices/virtual/misc/mdnie/hook_control/scr_magenta_blue),
+					action:"generic /sys/devices/virtual/misc/mdnie/hook_control/scr_magenta_blue"
+				}},
+				{ SPane:{
+					title:"Digital edge enhancement control"
+				}},
+				{ SCheckBox:{
+					label:"Digital edge enhancement UI master switch",
+					default:$(cat /sys/devices/virtual/misc/mdnie/hook_control/s_edge_enhancement),
+					action:"generic /sys/devices/virtual/misc/mdnie/hook_control/s_edge_enhancement"
+				}},
+				{ SSeekBar:{
+					title:"Amount",
+					min:-128, max:128,
+					default:$(cat /sys/devices/virtual/misc/mdnie/hook_control/de_positive_e),
+					action:"generic /sys/devices/virtual/misc/mdnie/hook_control/de_positive_e"
+				}},
+				{ SSeekBar:{
+					title:"Radius",
+					min:-128, max:128,
+					default:$(cat /sys/devices/virtual/misc/mdnie/hook_control/de_positive_f),
+					action:"generic /sys/devices/virtual/misc/mdnie/hook_control/de_positive_f"
+				}},
+				{ SSeekBar:{
+					title:"Threshold",
+					min:-128, max:128,
+					default:$(cat /sys/devices/virtual/misc/mdnie/hook_control/de_positive_b),
+					action:"generic /sys/devices/virtual/misc/mdnie/hook_control/de_positive_b"
+				}},
+				{ SPane:{
+					title:"Other"
+				}},
+				{ STreeDescriptor:{
+					path:"/sys/devices/virtual/misc/mdnie/hook_control",
+					generic:{
+						element:{ SGeneric:{ title:"@NAME" }}
+					},
+					exclude:[ "s_digital_noise_reduction", "s_high_dynamic_range", "s_factory_chroma_saturation", "cs_weight", "cs_red", "cs_green", "cs_blue", "cs_yellow", "cs_cyan", "cs_magenta", "s_MCM", "mcm_temperature", "scr_white_red", "scr_white_green", "scr_white_blue", "scr_red_red", "scr_red_green", "scr_red_blue", "scr_green_red", "scr_green_green", "scr_green_blue", "scr_blue_red", "scr_blue_green", "scr_blue_blue", "scr_yellow_red", "scr_yellow_green", "scr_yellow_blue", "scr_cyan_red", "scr_cyan_green", "scr_cyan_blue", "scr_magenta_red", "scr_magenta_green", "scr_magenta_blue", "s_edge_enhancement", "de_positive_e", "de_positive_f", "de_positive_b" ]
+				}}
+			]
+		},
+		{
+			name:Sound,
+			elements:[
+				{ SPane:{
+					title:"Boeffla Sound $(cat /sys/devices/virtual/misc/boeffla_sound/version)"
+				}},
+				{ SCheckBox:{
+					label:"Enable Boeffla Sound",
+					default:$(/res/synapse/actions/advanced -f NF /sys/devices/virtual/misc/boeffla_sound/boeffla_sound),
+					action:"advanced -f NF /sys/devices/virtual/misc/boeffla_sound/boeffla_sound",
+				}},
+				{ SCheckBox:{
+					label:"DAC Direct",
+					description:"Bypass the analog channel",
+					default:$(/res/synapse/actions/advanced -f NF /sys/devices/virtual/misc/boeffla_sound/dac_direct),
+					action:"advanced -f NF /sys/devices/virtual/misc/boeffla_sound/dac_direct"
+				}},
+				{ SCheckBox:{
+					label:"DAC oversampling",
+					description:"128x Oversampling",
+					default:$(/res/synapse/actions/advanced -f NF /sys/devices/virtual/misc/boeffla_sound/dac_oversampling),
+					action:"advanced -f NF /sys/devices/virtual/misc/boeffla_sound/dac_oversampling"
+				}},
+				{ SCheckBox:{
+					label:"FLL Tuning",
+					description:"Tune the chip clock for better quality",
+					default:$(/res/synapse/actions/advanced -f NF /sys/devices/virtual/misc/boeffla_sound/fll_tuning),
+					action:"advanced -f NF /sys/devices/virtual/misc/boeffla_sound/fll_tuning"
+				}},
+				{ SCheckBox:{
+					label:"Speaker Tuning",
+					description:"Tune up the phone speaker",
+					default:$(/res/synapse/actions/advanced -f NF /sys/devices/virtual/misc/boeffla_sound/speaker_tuning),
+					action:"advanced -f NF /sys/devices/virtual/misc/boeffla_sound/speaker_tuning"
+				}},
+				{ SCheckBox:{
+					label:"Mono Downmix",
+					description:"Convert stereo into mono",
+					default:$(/res/synapse/actions/advanced -f NF /sys/devices/virtual/misc/boeffla_sound/mono_downmix),
+					action:"advanced -f NF /sys/devices/virtual/misc/boeffla_sound/mono_downmix"
+				}},
+				{ SSeekBar:{
+					title:"Stereo expansion",
+					description:"Improve sound deepness and clarity",
+					max:31,
+					default:$(/res/synapse/actions/advanced -f NF /sys/devices/virtual/misc/boeffla_sound/stereo_expansion),
+					action:"advanced -f NF /sys/devices/virtual/misc/boeffla_sound/stereo_expansion"
+				}},
+				{ SSeekBar:{
+					title:"Headphone Volume (Left)",
+					max:63,
+					default:$(/res/synapse/actions/sound -v /sys/devices/virtual/misc/boeffla_sound/headphone_volume left),
+					action:"sound -v /sys/devices/virtual/misc/boeffla_sound/headphone_volume left"
+				}},
+				{ SSeekBar:{
+					title:"Headphone Volume (Right)",
+					max:63,
+					default:$(/res/synapse/actions/sound -v /sys/devices/virtual/misc/boeffla_sound/headphone_volume right),
+					action:"sound -v /sys/devices/virtual/misc/boeffla_sound/headphone_volume right"
+				}},
+				{ SSeekBar:{
+					title:"Speaker Volume (Left)",
+					max:63,
+					default:$(/res/synapse/actions/sound -v /sys/devices/virtual/misc/boeffla_sound/speaker_volume left),
+					action:"sound -v /sys/devices/virtual/misc/boeffla_sound/speaker_volume left"
+				}},
+				{ SSeekBar:{
+					title:"Speaker Volume (Right)",
+					max:63,
+					default:$(/res/synapse/actions/sound -v /sys/devices/virtual/misc/boeffla_sound/speaker_volume right),
+					action:"sound -v /sys/devices/virtual/misc/boeffla_sound/speaker_volume right"
+				}},
+				{ SSeekBar:{
+					title:"Microphone General Gain",
+					description:"General Microphone Volume",
+					max:31,
+					default:$(/res/synapse/actions/advanced -f NF /sys/devices/virtual/misc/boeffla_sound/mic_level_general),
+					action:"advanced -f NF /sys/devices/virtual/misc/boeffla_sound/mic_level_general"
+				}},
+				{ SSeekBar:{
+					title:"Microphone Call Gain",
+					description:"Call Microphone Volume",
+					max:31,
+					default:$(/res/synapse/actions/advanced -f NF /sys/devices/virtual/misc/boeffla_sound/mic_level_call),
+					action:"advanced -f NF /sys/devices/virtual/misc/boeffla_sound/mic_level_call"
+				}},
+				{ SCheckBox:{
+					label:"HW Equalizer",
+					description:"Manually tune the frequencies",
+					default:$(/res/synapse/actions/advanced -f NF /sys/devices/virtual/misc/boeffla_sound/eq),
+					action:"advanced -f NF /sys/devices/virtual/misc/boeffla_sound/eq"
+				}},
+				{ SPane:{
+					title:"Equalizer Gains"
+				}},
+$(for GAIN in 1 2 3 4 5; do
+	cat << EOF1
+				{ SSeekBar:{
+					title:"Gain $GAIN",
+					min:-12, max:12,
+					default:$(/res/synapse/actions/sound -g /sys/devices/virtual/misc/boeffla_sound/eq_gains $GAIN),
+					action:"sound -g /sys/devices/virtual/misc/boeffla_sound/eq_gains $GAIN"
+				}},
+EOF1
+done)
+				{ SPane:{
+					title:"Equalizer Bands"
+				}},
+$(for BAND in 1 2 3 4 5; do
+	cat << EOF1
+				{ SSeekBar:{
+					title:"Band $BAND A",
+					max:65535,
+					default:$(/res/synapse/actions/sound -b /sys/devices/virtual/misc/boeffla_sound/eq_bands $BAND 1),
+					action:"sound -b /sys/devices/virtual/misc/boeffla_sound/eq_bands $BAND 1"
+				}},
+				{ SSeekBar:{
+					title:"Band $BAND B",
+					max:65535,
+					default:$(/res/synapse/actions/sound -b /sys/devices/virtual/misc/boeffla_sound/eq_bands $BAND 2),
+					action:"sound -b /sys/devices/virtual/misc/boeffla_sound/eq_bands $BAND 2"
+				}},
+				{ SSeekBar:{
+					title:"Band $BAND C",
+					max:65535,
+					default:$(/res/synapse/actions/sound -b /sys/devices/virtual/misc/boeffla_sound/eq_bands $BAND 3),
+					action:"sound -b /sys/devices/virtual/misc/boeffla_sound/eq_bands $BAND 3"
+				}},
+				{ SSeekBar:{
+					title:"Band $BAND PG",
+					max:65535,
+					default:$(/res/synapse/actions/sound -b /sys/devices/virtual/misc/boeffla_sound/eq_bands $BAND 4),
+					action:"sound -b /sys/devices/virtual/misc/boeffla_sound/eq_bands $BAND 4"
+				}},
+EOF1
+done)
+				{ SPane:{
+					title:"Advanced"
+				}},
+				{ SSeekBar:{
+					title:"Change Delay",
+					max:5000000,
+					default:$(/res/synapse/actions/advanced -f NF /sys/devices/virtual/misc/boeffla_sound/change_delay),
+					action:"advanced -f NF /sys/devices/virtual/misc/boeffla_sound/change_delay"
+				}},
+				{ SSeekBar:{
+					title:"Debug Level",
+					description:"Set 0 to disable debug, an higher value increases verbosity.",
+					max:2,
+					default:$(/res/synapse/actions/advanced -f NF /sys/devices/virtual/misc/boeffla_sound/debug_level),
+					action:"advanced -f NF /sys/devices/virtual/misc/boeffla_sound/debug_level"
+				}},
+				{ SCheckBox:{
+					label:"Privacy Mode",
+					description:"Quiet the phone speaker on Headphones plug",
+					default:$(/res/synapse/actions/advanced -f NF /sys/devices/virtual/misc/boeffla_sound/privacy_mode),
+					action:"advanced -f NF /sys/devices/virtual/misc/boeffla_sound/privacy_mode"
+				}}
+				
+			]
+		},
+		{
+			name:Misc,
+			elements:[
+				{ SOptionList:{
+					title:"TCP Congestion Control Algorithm",
+					description:"Set the algorithm of internet congestion avoidance, to possibly improve speeds and load times.",
+					action:"generic /proc/sys/net/ipv4/tcp_congestion_control",
+					values:[ $(for i in $(cat /proc/sys/net/ipv4/tcp_available_congestion_control); do echo $i,; done) ]
+				}},
+				{ SSeekBar:{
+					title:"Vibrator Intensity",
+					description:"Change the strength of vibration.",
+					max:100,
+					default:$(cat /sys/vibrator/pwm_val),
+					action:"generic /sys/vibrator/pwm_val"
+				}},
+				{ SCheckBox:{
+					label:"Camera Shutter Sound",
+					description:"Disabling this will set the speaker volume to 0 when rear camera sensor is active. This is implemented from the kernel, so does not need any ROM side support.",
+					default:$(cat /sys/devices/virtual/camera/rear/camera_speaker_enabled),
+					action:"generic /sys/devices/virtual/camera/rear/camera_speaker_enabled"
+				}},
+				{ SPane:{
+					title:"Random",
+					description:"Random number generator settings"
+				}},
+				{ SLiveLabel:{
+					title:"Entropy Available",
+					refresh:1000,
+					action:"echo \$(cat /proc/sys/kernel/random/entropy_avail)/\$(cat /proc/sys/kernel/random/poolsize)"
+				}},
+				{ SSeekBar:{
+					title:"Random Read Wakeup Threshold",
+					min:64, max:4096,
+					default:$(cat /proc/sys/kernel/random/read_wakeup_threshold),
+					action:"generic /proc/sys/kernel/random/read_wakeup_threshold"
+				}},
+				{ SSeekBar:{
+					title:"Random Write Wakeup Threshold",
+					min:64, max:4096,
+					default:$(cat /proc/sys/kernel/random/write_wakeup_threshold),
+					action:"generic /proc/sys/kernel/random/write_wakeup_threshold"
+				}},
+				{ SSeekBar:{
+					title:"Urandom Min Reseed",
+					max:3600, unit:" s",
+					default:$(cat /proc/sys/kernel/random/urandom_min_reseed_secs),
+					action:"generic /proc/sys/kernel/random/urandom_min_reseed_secs"
+				}},
+				{ SCheckBox:{
+					label:"Force Enable Frandom/Erandom",
+					description:"Force the system to use frandom/erandom instead of random/urandom. WARNING: frandom is 10-50 times faster but is not secure as linux default random number generator (More info <a href='http://billauer.co.il/frandom.html'>here</a>) .",
+					default:$(/res/synapse/actions/advanced -r),
+					action:"advanced -r"
+				}},
+				{ SPane:{
+					title:"Touchkeys"
+				}},
+				{ SCheckBox:{
+					label:"Force Disable Touchkeys",
+					default:$(cat /sys/devices/virtual/sec/sec_touchkey/force_disable),
+					action:"generic /sys/devices/virtual/sec/sec_touchkey/force_disable"
+				}},
+				{ SCheckBox:{
+					label:"Led On Screen Touch",
+					description:"Touchkeys will light up on touchscreen touch.",
+					default:$(cat /sys/devices/virtual/sec/sec_touchkey/touch_led_on_screen_touch),
+					action:"generic /sys/devices/virtual/sec/sec_touchkey/touch_led_on_screen_touch"
+				}}
+			]
+		}
+	]
+}
+EOF0

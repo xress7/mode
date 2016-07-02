@@ -1,0 +1,34 @@
+case "$1" in
+	-f) # advanced -f [field] [path] [value] NOTE: if $2 is NF -> last field, if $2 is 1 -> first field
+		if [[ ! -z "$4" ]]; then
+			echo "$4" > "$3"; fi
+		awk '{print $'$2'}' "$3"
+	;;
+	-p) # advanced -p [delimiter] [field] [path] [value]
+		if [[ ! -z "$5" ]]; then
+			echo "$5" > "$4"; fi
+		awk -F "$2" '{print $'"$3"'}' "$4"
+	;;
+	-r) # symlink frandom/erandom over random/urandom
+		if [[ ! -z "$2" ]]; then
+			case "$2" in
+				1)
+					chmod 666 /dev/frandom /dev/erandom
+					mv /dev/random /dev/.random
+					mv /dev/urandom /dev/.urandom
+					ln -s /dev/frandom /dev/random
+					ln -s /dev/erandom /dev/urandom
+				;;
+				0)
+					mv -f /dev/.random /dev/random
+					mv -f /dev/.urandom /dev/urandom
+				;;
+			esac
+		fi
+
+		if [[ ! -L /dev/random && ! -L /dev/urandom ]]; then
+			echo "0"
+		elif [[ -L /dev/random && -L /dev/urandom ]]; then
+			echo "1"; fi
+	;;
+esac

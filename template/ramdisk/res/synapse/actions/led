@@ -1,0 +1,21 @@
+case "$1" in
+	-s) # led -s [file] [target] [value]
+		FILE="$2"
+		TARGET="$3"
+		VALUE="$4"
+
+		if [[ ! -z "$VALUE" ]]; then
+			COUNT=1
+			for FIELD in $(tr -d '[:alpha:]' < "$FILE" | busybox sed -e 's/,/ /g' | tr -d '[:punct:]'); do
+				if [[ "$COUNT" -eq "$TARGET" ]]; then
+					OUTPUT+=" $VALUE"
+				else
+					OUTPUT+=" $FIELD"
+				fi
+				((COUNT++))
+			done
+			echo "$OUTPUT" > "$FILE"
+		fi
+		tr -d '[:alpha:]' < "$FILE" | busybox sed -e 's/,/ /g' | tr -d '[:punct:]' | awk "{print \$${TARGET}}"
+	;;
+esac
