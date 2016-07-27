@@ -571,6 +571,8 @@ endif # $(dot-config)
 # Defaults to vmlinux, but the arch makefile usually adds further targets
 all: vmlinux
 
+KBUILD_CFLAGS	+= $(call cc-disable-warning,maybe-uninitialized,)
+
 include $(srctree)/arch/$(SRCARCH)/Makefile
 
 # Tell gcc to never replace conditional load with a non-conditional one
