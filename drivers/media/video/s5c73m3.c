@@ -75,7 +75,8 @@ static int speaker_vol_left = 377, speaker_vol_right = 377;
 static bool sensor_enabled = false;
 static bool camera_speaker_enabled = true;
 
-/*#define S5C73M3_FROM_BOOTING*/
+#define S5C73M3_FW_DIR "/system/vendor/firmware"
+#define FW_PATH_LEN 50
 #define S5C73M3_CORE_VDD	"/data/ISP_CV"
 #define S5C73M3_FW_PATH		"/sdcard/SlimISP.bin"
 #define S5C73M3_FW_VER_LEN		6
@@ -637,7 +638,7 @@ static int s5c73m3_get_sensor_fw_binary(struct v4l2_subdev *sd)
 	struct file *fp = NULL;
 	mm_segment_t old_fs;
 	long ret = 0;
-	char fw_path[25] = {0,};
+	char fw_path[FW_PATH_LEN] = {0,};
 	u8 mem0 = 0, mem1 = 0;
 	u32 CRC = 0;
 	u32 DataCRC = 0;
@@ -647,10 +648,10 @@ static int s5c73m3_get_sensor_fw_binary(struct v4l2_subdev *sd)
 
 #if defined(CONFIG_MACH_T0)
 	if (state->sensor_fw[1] == 'D') {
-		sprintf(fw_path, "/data/cfw/SlimISP_%cK.bin",
+		sprintf(fw_path, S5C73M3_FW_DIR "/SlimISP_%cK.bin",
 			state->sensor_fw[0]);
 	} else {
-		sprintf(fw_path, "/data/cfw/SlimISP_%c%c.bin",
+		sprintf(fw_path, S5C73M3_FW_DIR "/SlimISP_%c%c.bin",
 			state->sensor_fw[0],
 			state->sensor_fw[1]);
 	}
@@ -668,13 +669,13 @@ static int s5c73m3_get_sensor_fw_binary(struct v4l2_subdev *sd)
 	}
 #else
 	if (state->sensor_fw[0] == 'O') {
-		sprintf(fw_path, "/data/cfw/SlimISP_G%c.bin",
+		sprintf(fw_path, S5C73M3_FW_DIR "/SlimISP_G%c.bin",
 			state->sensor_fw[1]);
 	} else if (state->sensor_fw[0] == 'S') {
-		sprintf(fw_path, "/data/cfw/SlimISP_Z%c.bin",
+		sprintf(fw_path, S5C73M3_FW_DIR "/SlimISP_Z%c.bin",
 			state->sensor_fw[1]);
 	} else {
-	sprintf(fw_path, "/data/cfw/SlimISP_%c%c.bin",
+	sprintf(fw_path, S5C73M3_FW_DIR "/SlimISP_%c%c.bin",
 		state->sensor_fw[0],
 		state->sensor_fw[1]);
 	}
@@ -1016,8 +1017,8 @@ static int s5c73m3_get_phone_fw_version(struct v4l2_subdev *sd)
 	struct device *dev = sd->v4l2_dev->dev;
 	struct s5c73m3_state *state = to_state(sd);
 	const struct firmware *fw = {0, };
-	char fw_path[20] = {0,};
-	char fw_path_in_data[25] = {0,};
+	char fw_path[FW_PATH_LEN] = {0,};
+	char fw_path_in_data[FW_PATH_LEN] = {0,};
 	u8 *buf = NULL;
 	int err = 0;
 	int retVal = 0;
@@ -1058,7 +1059,7 @@ static int s5c73m3_get_phone_fw_version(struct v4l2_subdev *sd)
 	}
 #endif
 
-	sprintf(fw_path_in_data, "/data/cfw/%s",
+	sprintf(fw_path_in_data, S5C73M3_FW_DIR "/%s",
 		fw_path);
 
 	buf = vmalloc(S5C73M3_FW_VER_LEN+1);
@@ -1099,6 +1100,8 @@ request_fw:
 			camfw_info[S5C73M3_IN_DATA]
 				.ver[S5C73M3_FW_VER_LEN+1] = ' ';
 		}
+		/* support fw only from "data" */
+		if(retVal < 0) err = retVal;
 
 		/* check fw in system folder */
 		retVal = request_firmware(&fw, fw_path, dev);
@@ -2506,7 +2509,6 @@ static int s5c73m3_s_ctrl(struct v4l2_subdev *sd, struct v4l2_control *ctrl)
 			err = s5c73m3_check_fw(sd, 1);
 		else
 			err = 0;
-
 		break;
 
 	case V4L2_CID_CAMERA_SENSOR_MODE:
@@ -2749,8 +2751,8 @@ static int s5c73m3_load_fw(struct v4l2_subdev *sd)
 	struct device *dev = sd->v4l2_dev->dev;
 	struct s5c73m3_state *state = to_state(sd);
 	const struct firmware *fw;
-	char fw_path[20] = {0,};
-	char fw_path_in_data[25] = {0,};
+	char fw_path[FW_PATH_LEN] = {0,};
+	char fw_path_in_data[FW_PATH_LEN] = {0,};
 	u8 *buf = NULL;
 	int err = 0;
 	int txSize = 0;
@@ -2794,7 +2796,7 @@ static int s5c73m3_load_fw(struct v4l2_subdev *sd)
 	}
 #endif
 
-	sprintf(fw_path_in_data, "/data/cfw/%s",
+	sprintf(fw_path_in_data, S5C73M3_FW_DIR "/%s",
 		fw_path);
 
 	old_fs = get_fs();
@@ -2806,8 +2808,10 @@ static int s5c73m3_load_fw(struct v4l2_subdev *sd)
 			fp = filp_open(S5C73M3_FW_PATH, O_RDONLY, 0);
 		else
 			fp = filp_open(fw_path_in_data, O_RDONLY, 0);
-		if (IS_ERR(fp))
+		if (IS_ERR(fp)){
+			err = -ENOENT;
 			goto out;
+		}
 		else
 			cam_dbg("%s is opened\n",
 			state->fw_index == S5C73M3_SD_CARD ?
@@ -3542,7 +3546,8 @@ static int s5c73m3_SPI_booting(struct v4l2_subdev *sd)
 	}
 
 	/*download fw by SPI*/
-	s5c73m3_load_fw(sd);
+	err = s5c73m3_load_fw(sd);
+	CHECK_ERR(err);
 
 	/*ARM reset*/
 	err = s5c73m3_write(sd, 0x3000, 0x0004, 0xFFFD);
@@ -3606,7 +3611,6 @@ static int s5c73m3_read_vdd_core(struct v4l2_subdev *sd)
 #if 0 /*read_val should be 0x7383*/
 	err = s5c73m3_read(sd, 0x0000, 0x131C, &read_val);
 	CHECK_ERR(err);
-
 	cam_dbg("read_val %#x\n", read_val);
 #endif
 
