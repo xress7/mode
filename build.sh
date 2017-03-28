@@ -6,13 +6,21 @@
 # build.sh zip -> create/recreate zip only
 # build.sh .config -> build/rebuild kernel using .config
 
-if [[ ! "$1" = "zip" ]]; then
-	if [[ ! "$1" = ".config" ]]; then
-		make n7100_defconfig; fi
-	make -j8
+if [ -z "${CONFIG}" ]; then
+  CONFIG=n7100-new
+fi
+if [ -z "${JOBS}" ]; then
+  JOBS=4
+fi
+
+if [ ! "${1}" = zip ]]; then
+  if [ ! "${1}" = .config ]; then
+    make "${CONFIG}_defconfig"
+  fi
+  make -j"${JOBS}"
 fi
 
 cp arch/arm/boot/zImage template/zImage
-find . -name "*.ko" -exec cp {} template/modules \;
+find $(find * -maxdepth 0 | sed '/template/d' ) -name "*.ko" -exec cp {} template/modules \;
 cd template
-zip -r9 ../"void-kernel-$(cat ../version)-g$(git rev-parse --short HEAD)-n7100.zip" * -x ".gitignore" "modules/placeholder"
+zip -r9 ../"void-kernel-$(cat ../version)-g$(git rev-parse --short HEAD)-${CONFIG}.zip" * -x ".gitignore" "modules/placeholder"

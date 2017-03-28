@@ -15,7 +15,7 @@ device.name4=
 device.name5=
 
 # shell variables
-block=/dev/block/mmcblk0p8;
+block=/dev/block/platform/dw_mmc/by-name/BOOT;
 
 ## end setup
 
@@ -218,12 +218,20 @@ dump_boot;
 
 # begin ramdisk changes
 
+# begin system changes
+mount -o remount,rw /system
+
+# check if this version need kernel modules
+mod=/tmp/anykernel/modules
+if [ -z $(find "${mod}" -name "*.ko" 1>/dev/null 2>&1) ]; then
+  sed -i 's/do.modules=1/do.modules=0/g' /tmp/anykernel/anykernel.sh # disable modules injection
+fi
+
 # f2fs support
 sed -i '/f2fs/d' fstab.smdk4x12
-insert_line fstab.smdk4x12 "thereisnt" "before" "/system             ext4" "/dev/block/mmcblk0p13    /system             f2fs      ro,noatime,nodiratime,discard,background_gc=off           wait"
-insert_line fstab.smdk4x12 "thereisnt" "before" "/cache              ext4" "/dev/block/mmcblk0p12    /cache              f2fs      noatime,nodiratime,discard,background_gc=on,nosuid,nodev  wait,check"
-insert_line fstab.smdk4x12 "thereisnt" "before" "/preload            ext4" "/dev/block/mmcblk0p14    /preload            f2fs      noatime,nosuid,nodev                                      wait"
-insert_line fstab.smdk4x12 "thereisnt" "before" "/data               ext4" "/dev/block/mmcblk0p16    /data               f2fs      noatime,nodiratime,discard,background_gc=on,nosuid,nodev  wait,check,encryptable=footer"
+insert_line fstab.smdk4x12 "thereisnt" "before" "/cache              ext4" "/dev/block/mmcblk0p12    /cache              f2fs      noatime,nosuid,nodev,inline_xattr,inline_data,background_gc=on  wait"
+insert_line fstab.smdk4x12 "thereisnt" "before" "/preload            ext4" "/dev/block/mmcblk0p14    /preload            f2fs      noatime,nosuid,nodev,inline_xattr,inline_data,background_gc=on  wait"
+insert_line fstab.smdk4x12 "thereisnt" "before" "/data               ext4" "/dev/block/mmcblk0p16    /data               f2fs      noatime,nosuid,nodev,inline_xattr,inline_data,background_gc=on  wait,check,encryptable=footer"
 
 # init.smdk4x12.rc
 remove_section init.smdk4x12.rc "on early-init" "noop"
@@ -233,19 +241,16 @@ remove_section init.smdk4x12.rc "# Powersave" "performance"
 remove_line init.smdk4x12.rc "write /sys/class/mdnie/mdnie/scenario 0"
 remove_line init.smdk4x12.rc "write /sys/class/mdnie/mdnie/mode 0"
 
-# synapse support
-append_file init.smdk4x12.rc "/sbin/uci" synapse
-
-# begin system changes
-mount -o remount,rw /system
-
 # remove older modules
 rm -rf lib/modules
-rm -rf /system/lib/module
+rm -rf /system/lib/modules
 mkdir -p /system/lib/modules
 
 # remove power hal
 rm -rf /system/lib/hw/power.*.so
+
+# synapse support
+append_file init.smdk4x12.rc "/sbin/uci" synapse
 
 # end system changes
 mount -o remount,ro /system
