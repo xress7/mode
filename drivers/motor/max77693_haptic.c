@@ -22,7 +22,6 @@
 #include <linux/mfd/max77693.h>
 #include <linux/mfd/max77693-private.h>
 
-#define SEC_DEBUG_VIB
 #define PWM_MIN 0
 #define PWM_DEFAULT 50
 #define PWM_THRESH 75
@@ -55,7 +54,9 @@ static void max77693_haptic_i2c(struct max77693_haptic_data *hap_data, bool en)
 	u8 value = hap_data->pdata->reg2;
 	u8 lscnfg_val = 0x00;
 
+#ifdef SEC_DEBUG_VIB
 	pr_debug("[VIB] %s %d\n", __func__, en);
+#endif
 
 	if (en) {
 		value |= MOTOR_EN;
@@ -102,7 +103,9 @@ static void haptic_enable(struct timed_output_dev *tout_dev, int value)
 	queue_work(hap_data->workqueue, &hap_data->work);
 	spin_lock_irqsave(&hap_data->lock, flags);
 	if (value > 0) {
+#ifdef SEC_DEBUG_VIB
 		pr_debug("%s value %d\n", __func__, value);
+#endif
 		value = min(value, (int)hap_data->pdata->max_timeout);
 		hrtimer_start(timer, ns_to_ktime((u64)value * NSEC_PER_MSEC),
 			HRTIMER_MODE_REL);
@@ -128,8 +131,10 @@ static int vibetonz_clk_on(struct device *dev, bool en)
 {
 	struct clk *vibetonz_clk = NULL;
 	vibetonz_clk = clk_get(dev, "timers");
+#ifdef SEC_DEBUG_VIB
 	pr_debug("[VIB] DEV NAME %s %lu\n",
 		 dev_name(dev), clk_get_rate(vibetonz_clk));
+#endif
 
 	if (IS_ERR(vibetonz_clk)) {
 		pr_err("[VIB] failed to get clock for the motor\n");
@@ -154,7 +159,9 @@ static void haptic_work(struct work_struct *work)
 	struct max77693_haptic_data *hap_data
 		= container_of(work, struct max77693_haptic_data, work);
 
+#ifdef SEC_DEBUG_VIB
 	pr_debug("[VIB] %s\n", __func__);
+#endif
 	if (hap_data->timeout > 0) {
 		if (hap_data->running)
 			return;
@@ -354,7 +361,9 @@ static int max77693_haptic_probe(struct platform_device *pdev)
 		= max77693_pdata->haptic_data;
 	struct max77693_haptic_data *hap_data;
 
+#ifdef SEC_DEBUG_VIB
 	pr_debug("[VIB] ++ %s\n", __func__);
+#endif
 	 if (pdata == NULL) {
 		pr_err("%s: no pdata\n", __func__);
 		return -ENODEV;
@@ -442,8 +451,10 @@ static int max77693_haptic_probe(struct platform_device *pdev)
 	}
 
 #endif
+#ifdef SEC_DEBUG_VIB
 	printk(KERN_DEBUG "[VIB] timed_output device is registrated\n");
 	pr_debug("[VIB] -- %s\n", __func__);
+#endif
 
 	return error;
 
@@ -499,7 +510,9 @@ static struct platform_driver max77693_haptic_driver = {
 
 static int __init max77693_haptic_init(void)
 {
+#ifdef SEC_DEBUG_VIB
 	pr_debug("[VIB] %s\n", __func__);
+#endif
 	return platform_driver_register(&max77693_haptic_driver);
 }
 module_init(max77693_haptic_init);
