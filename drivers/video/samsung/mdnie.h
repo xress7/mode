@@ -24,8 +24,6 @@ enum SCENARIO {
 	UI_MODE,
 	VIDEO_MODE,
 	CAMERA_MODE = 4,
-	VIDEO_WARM_MODE,
-	VIDEO_COLD_MODE,
 	NAVI_MODE,
 	GALLERY_MODE,
 	VT_MODE,
@@ -44,19 +42,6 @@ enum SCENARIO {
 enum SCENARIO_DMB {
 	DMB_NORMAL_MODE = 20,
 	DMB_MODE_MAX
-};
-
-enum OUTDOOR {
-	OUTDOOR_OFF,
-	OUTDOOR_ON,
-	OUTDOOR_MAX,
-};
-
-enum TONE {
-	TONE_NORMAL,
-	TONE_WARM,
-	TONE_COLD,
-	TONE_MAX,
 };
 
 enum CABC {
@@ -78,12 +63,6 @@ enum POWER_LUT_LEVEL {
 	LUT_LEVEL_OUTDOOR_1,
 	LUT_LEVEL_OUTDOOR_2,
 	LUT_LEVEL_MAX
-};
-
-enum NEGATIVE {
-	NEGATIVE_OFF,
-	NEGATIVE_ON,
-	NEGATIVE_MAX,
 };
 
 enum ACCESSIBILITY {
@@ -121,11 +100,8 @@ struct mdnie_info {
 	unsigned int enable;
 	enum SCENARIO scenario;
 	enum MODE mode;
-	enum TONE tone;
-	enum OUTDOOR outdoor;
 	enum CABC cabc;
 	unsigned int tuning;
-	unsigned int negative;
 	unsigned int accessibility;
 	unsigned int color_correction;
 	char path[50];
@@ -136,12 +112,12 @@ struct mdnie_info {
 
 extern struct mdnie_info *g_mdnie;
 
-int mdnie_send_sequence(struct mdnie_info *mdnie, unsigned short *seq);
 #if defined(CONFIG_FB_MDNIE_PWM)
 extern void set_mdnie_pwm_value(struct mdnie_info *mdnie, int value);
 #endif
 extern int mdnie_calibration(unsigned short x, unsigned short y, int *r);
 extern int mdnie_request_firmware(const char *path, u16 **buf, const char *name);
 extern int mdnie_open_file(const char *path, char **fp);
+extern int mdnie_send_sequence(struct mdnie_info *mdnie, const unsigned short *seq);
 
 #endif /* __MDNIE_H__ */
