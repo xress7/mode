@@ -130,17 +130,13 @@
 static struct class *mdnie_class;
 struct mdnie_info *g_mdnie;
 
-#ifdef CONFIG_FB_S5P_MDNIE_CONTROL
 extern unsigned short mdnie_reg_hook(unsigned short reg, unsigned short value);
 extern unsigned short *mdnie_sequence_hook(struct mdnie_info *pmdnie, unsigned short *seq);
-#endif
 
 extern int mdnie_send_sequence(struct mdnie_info *mdnie, unsigned short *seq)
 {
 	int ret = 0, i = 0;
-#ifdef CONFIG_FB_S5P_MDNIE_CONTROL
 	unsigned short *wbuf;
-#endif
 
 	if (IS_ERR_OR_NULL(seq)) {
 		dev_err(mdnie->dev, "mdnie sequence is null\n");
@@ -149,17 +145,14 @@ extern int mdnie_send_sequence(struct mdnie_info *mdnie, unsigned short *seq)
 
 	mutex_lock(&mdnie->dev_lock);
 
-#ifdef CONFIG_FB_S5P_MDNIE_CONTROL
 	wbuf = mdnie_sequence_hook(mdnie, seq);
-#endif
+
 	mdnie_mask();
 
-#ifdef CONFIG_FB_S5P_MDNIE_CONTROL
 	while (wbuf[i] != END_SEQ) {
 		ret += mdnie_write(wbuf[i], mdnie_reg_hook(wbuf[i], wbuf[i+1]));
 		i += 2;
 	}
-#endif
 
 	mdnie_unmask();
 
