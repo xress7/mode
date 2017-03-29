@@ -127,7 +127,7 @@
 static struct class *mdnie_class;
 struct mdnie_info *g_mdnie;
 
-extern int mdnie_send_sequence(struct mdnie_info *mdnie, const unsigned short *seq)
+static int mdnie_send_sequence(struct mdnie_info *mdnie, const unsigned short *seq)
 {
 	int ret = 0, i = 0;
 	const unsigned short *wbuf = NULL;

@@ -118,6 +118,5 @@ extern void set_mdnie_pwm_value(struct mdnie_info *mdnie, int value);
 extern int mdnie_calibration(unsigned short x, unsigned short y, int *r);
 extern int mdnie_request_firmware(const char *path, u16 **buf, const char *name);
 extern int mdnie_open_file(const char *path, char **fp);
-extern int mdnie_send_sequence(struct mdnie_info *mdnie, const unsigned short *seq);
 
 #endif /* __MDNIE_H__ */
