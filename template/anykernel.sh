@@ -65,9 +65,6 @@ rm -rf lib/modules
 rm -rf /system/lib/modules
 mkdir -p /system/lib/modules
 
-# remove power hal
-rm -rf /system/lib/hw/power.*.so
-
 # synapse support
 append_file init.smdk4x12.rc "/sbin/uci" synapse
 
